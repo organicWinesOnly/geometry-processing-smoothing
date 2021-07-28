@@ -1,5 +1,4 @@
 #include "smooth.h"
-#include <iostream>
 #include <Eigen/SparseCholesky>
 #include "igl/edge_lengths.h"
 #include "cotmatrix.h"
@@ -12,7 +11,6 @@ void smooth(
     double lambda,
     Eigen::MatrixXd & U)
 {
-  // Replace with your code
   using Sparse = Eigen::SparseMatrix<double>;
   Eigen::MatrixXd l;
   igl::edge_lengths(V, F, l);
@@ -23,8 +21,6 @@ void smooth(
   massmatrix(l, F, M);
 
   Sparse A;
-  Sparse M_sparse(L.rows(), L.cols());
-
   A = Sparse(M) - lambda * L;
   Eigen::SimplicialLDLT<Sparse> solver(A);
   U = solver.solve(M * G);

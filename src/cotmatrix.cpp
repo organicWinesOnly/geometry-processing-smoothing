@@ -1,9 +1,7 @@
 #include "cotmatrix.h"
 #include "igl/doublearea.h"
 #include <cmath>
-#include <map>
-#include <utility>
-#include <algorithm>
+#include <vector>
 
 
 using namespace std;
@@ -21,13 +19,12 @@ double cotangent(
 {
   double numerator, denom;
   numerator = pow(b, 2) + pow(c, 2) - pow(a, 2);
-  denom = 2 * d_area;
+  denom = 2.0 * d_area;
   return numerator / denom;
 }
 
 
 typedef Eigen::Triplet<double> T;
-typedef pair<int, int> P;
 void cotmatrix(
   const Eigen::MatrixXd & l,
   const Eigen::MatrixXi & F,
@@ -37,10 +34,9 @@ void cotmatrix(
   Eigen::VectorXd dArea;
   igl::doublearea(l, dArea);
 
-  map<P, double> laplacian_values;
-  double sum_of_weights = 0;
-  // for each face, compute the 3 cotangent values
-  // for each race create a pair of idicies and put them in a map object; 
+  int number_vertices = F.maxCoeff() + 1;
+  std::vector<T> triplet_list;
+  triplet_list.reserve(4 * 3 * number_vertices);
   for (int q = 0; q < F.rows(); q++)
   {
     double a, b, c;
@@ -49,45 +45,18 @@ void cotmatrix(
     c = l(q, 2);
     vector<double> sides = {a, b, c};
 
-    for (int r = 0; r < 3; r++)
+    for ( int r = 0; r < 3; r++)
     {
-      int i = min(F(q, r), F(q, (r+1) % 3));
-      int j = max(F(q, r), F(q, (r+1) % 3));
-      P index(i, j);
-
-      double weight =  0.5 * cotangent(sides[r], sides[(r+1) % 3],
-	                               sides[(r+2) % 3], dArea(q));
-
-      sum_of_weights += weight;
-      map<P, double>::iterator it = laplacian_values.find(index);
-      if (it == laplacian_values.end())
-      {
-	laplacian_values[index] = weight;
-      } else
-      {
-	it->second += weight;
-      }
+      int i = F(q, r);
+      int j = F(q, (r+1) % 3);
+      double weight =  0.5 * cotangent(sides[(r+2) % 3], sides[(r+1) % 3],
+                                       sides[r], dArea(q));
+      // two insertions because L is symmetric
+      triplet_list.push_back(T(i, j, weight));
+      triplet_list.push_back(T(j, i, weight));
+      triplet_list.push_back(T(i, i, -1.0 * weight));
+      triplet_list.push_back(T(j, j, -1.0 * weight));
     }
-  }
-
-  int number_vertices = F.maxCoeff() + 1;
-  std::vector<T> triplet_list;
-  triplet_list.reserve(2 * laplacian_values.size() + number_vertices);
-
-  for (map<P, double>::iterator it = laplacian_values.begin();
-       it != laplacian_values.end(); it++)
-  {
-    int i = it->first.first;
-    int j = it->first.second;
-    double value = it->second;
-    // two insertions because L is symmetric
-    triplet_list.push_back(T(i, j, value));
-    triplet_list.push_back(T(j, i, value));
-  }
-
-  for (int i = 0; i < number_vertices; i++)
-  {
-    triplet_list.push_back(T(i, i, -1 * sum_of_weights));
   }
   L.resize(number_vertices, number_vertices);
   L.setFromTriplets(triplet_list.begin(), triplet_list.end());
